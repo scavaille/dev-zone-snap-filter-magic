@@ -3,6 +3,7 @@ import { Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { LocationZone } from './LocationZones';
+import { useMyVisits } from '@/hooks/useMyVisits'; // adapte le chemin si besoin
 
 interface PhotoFilterProps {
   imageData: string;
@@ -14,6 +15,10 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [filteredImageData, setFilteredImageData] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // → c'est ici qu'on place le hook useMyVisits 👇
+  const { data: myVisits, isLoading, error } = useMyVisits();
+  const alreadyVisited = myVisits?.includes(zone?.id ?? '');
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -109,6 +114,9 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
   };
 
   return (
+
+    
+
     <div className="w-full max-w-md mx-auto">
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
         <div className="relative">
@@ -142,7 +150,14 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
           )}
 
           {zone && (
-            <div className="space-y-3">
+          <div className="space-y-3">
+            {myVisits && myVisits.includes(zone.id) ? (
+              // si déjà visité
+              <p className="text-green-600 font-bold text-center">
+                ✅ You have already visited this place!
+              </p>
+            ) : (
+              // sinon → bouton Confirm
               <Button
                 onClick={handleCreateVisit}
                 disabled={!filteredImageData || isSubmitting}
@@ -158,8 +173,9 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
                   <>Confirm and save this picture</>
                 )}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
           <Button
             onClick={onReset}
