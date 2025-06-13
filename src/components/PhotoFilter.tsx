@@ -16,8 +16,7 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
   const [filteredImageData, setFilteredImageData] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // → c'est ici qu'on place le hook useMyVisits 👇
-  const { data: myVisits, isLoading, error } = useMyVisits();
+  const { data: myVisits, isLoading, isFetching, error } = useMyVisits();
   const alreadyVisited = myVisits?.includes(zone?.id ?? '');
 
   useEffect(() => {
@@ -28,12 +27,34 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
 
     const img = new Image();
     img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      if (zone) applyLocationFilter(ctx, canvas.width, canvas.height, zone);
-      setFilteredImageData(canvas.toDataURL('image/jpeg', 0.9));
+      // Dimensions originales
+      let width = img.width;
+      let height = img.height;
+
+      // Taille max qu'on souhaite
+      const maxSize = 1200;
+
+      if (width > maxSize || height > maxSize) {
+        const aspectRatio = width / height;
+        if (width > height) {
+          width = maxSize;
+          height = Math.round(maxSize / aspectRatio);
+        } else {
+          height = maxSize;
+          width = Math.round(maxSize * aspectRatio);
+        }
+      }
+
+      // Redimensionnement du canvas
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Application du filtre + génération de l'image compressée
+      if (zone) applyLocationFilter(ctx, width, height, zone);
+      setFilteredImageData(canvas.toDataURL('image/jpeg', 0.7)); // compression 0.7
     };
+
     img.src = imageData;
   }, [imageData, zone]);
 
@@ -72,17 +93,6 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
     ctx.fillText(zone.description, width / 2, height - 15);
   };
 
-  const downloadImage = () => {
-    if (!filteredImageData) return;
-    const link = document.createElement('a');
-    link.download = `geofilter-${zone?.name.replace(/\s+/g, '-').toLowerCase() || 'photo'}-${Date.now()}.jpg`;
-    link.href = filteredImageData;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Photo downloaded to your device!');
-  };
-
   const handleCreateVisit = async () => {
     if (!filteredImageData || isSubmitting) return;
     setIsSubmitting(true);
@@ -114,9 +124,6 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
   };
 
   return (
-
-    
-
     <div className="w-full max-w-md mx-auto">
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
         <div className="relative">
@@ -132,50 +139,33 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
         </div>
 
         <div className="p-6">
-          {zone ? (
-            <div className="text-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                Your visit has been confirmed! 🎉
-              </h3>
-            </div>
-          ) : (
-            <div className="text-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                So close! Your photo is great, but it looks like you're just a bit too far.
-              </h3>
-              <p className="text-gray-600 text-sm">
-                Get a little closer to the spot and try again!
-              </p>
+          {zone && (
+            <div className="space-y-3">
+              {isLoading || isFetching ? (
+                <p className="text-center text-gray-500">Loading your visits...</p>
+              ) : alreadyVisited ? (
+                <p className="text-green-600 font-bold text-center">
+                  ✅ You have already visited this place!
+                </p>
+              ) : (
+                <Button
+                  onClick={handleCreateVisit}
+                  disabled={!filteredImageData || isSubmitting}
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  size="lg"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      Submitting…
+                    </>
+                  ) : (
+                    <>Confirm and save this picture</>
+                  )}
+                </Button>
+              )}
             </div>
           )}
-
-          {zone && (
-          <div className="space-y-3">
-            {myVisits && myVisits.includes(zone.id) ? (
-              // si déjà visité
-              <p className="text-green-600 font-bold text-center">
-                ✅ You have already visited this place!
-              </p>
-            ) : (
-              // sinon → bouton Confirm
-              <Button
-                onClick={handleCreateVisit}
-                disabled={!filteredImageData || isSubmitting}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                size="lg"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                    Submitting…
-                  </>
-                ) : (
-                  <>Confirm and save this picture</>
-                )}
-              </Button>
-            )}
-          </div>
-        )}
 
           <Button
             onClick={onReset}
