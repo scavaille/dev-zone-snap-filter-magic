@@ -63,6 +63,7 @@ const Index = () => {
             <PhotoFilter
               imageData={capturedImage}
               zone={currentZone}
+              matchingZone={!!currentZone}
               onReset={handleReset}
             />
           )}
