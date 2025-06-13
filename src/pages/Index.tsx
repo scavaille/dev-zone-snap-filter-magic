@@ -26,7 +26,7 @@ const Index: React.FC = () => {
       if (matchingZone) {
         toast.success(`🎉 Welcome to ${matchingZone.name}!`);
       } else {
-        toast.info('Photo captured! No special location filter available.');
+        toast.info('You’re outside the zone.');
       }
     } else {
       setLocationUnavailable(true);

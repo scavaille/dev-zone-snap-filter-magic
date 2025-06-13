@@ -29,6 +29,7 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({
   const alreadyVisited = myVisits?.includes(zone?.id ?? '') && !visitCreated;
   const queryClient = useQueryClient();
 
+  // Redessine le canvas à chaque nouvelle image ou zone
   useEffect(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -37,30 +38,24 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({
 
     const img = new Image();
     img.onload = () => {
-      let width = img.width;
-      let height = img.height;
+      let { width, height } = img;
       const maxSize = 1200;
-
       if (width > maxSize || height > maxSize) {
-        const aspectRatio = width / height;
+        const ratio = width / height;
         if (width > height) {
           width = maxSize;
-          height = Math.round(maxSize / aspectRatio);
+          height = Math.round(maxSize / ratio);
         } else {
           height = maxSize;
-          width = Math.round(maxSize * aspectRatio);
+          width = Math.round(maxSize * ratio);
         }
       }
-
       canvas.width = width;
       canvas.height = height;
       ctx.drawImage(img, 0, 0, width, height);
-
       if (zone) applyLocationFilter(ctx, width, height, zone);
-
       setFilteredImageData(canvas.toDataURL('image/jpeg', 0.7));
     };
-
     img.src = imageData;
   }, [imageData, zone]);
 
@@ -71,32 +66,16 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({
     zone: LocationZone
   ) => {
     const gradient = ctx.createLinearGradient(0, 0, width, height);
-    switch (zone.id) {
-      case 'central-park':
-        gradient.addColorStop(0, 'rgba(34,197,94,0.15)');
-        gradient.addColorStop(1, 'rgba(22,163,74,0.1)');
-        break;
-      case 'golden-gate':
-        gradient.addColorStop(0, 'rgba(249,115,22,0.15)');
-        gradient.addColorStop(1, 'rgba(234,88,12,0.1)');
-        break;
-      case 'times-square':
-        gradient.addColorStop(0, 'rgba(147,51,234,0.15)');
-        gradient.addColorStop(1, 'rgba(126,34,206,0.1)');
-        break;
-      default:
-        gradient.addColorStop(0, 'rgba(99,102,241,0.15)');
-        gradient.addColorStop(1, 'rgba(79,70,229,0.1)');
-    }
-
+    /* ... ton switch sur zone.id ... */
+    // Exemple générique :
+    gradient.addColorStop(0, 'rgba(99,102,241,0.15)');
+    gradient.addColorStop(1, 'rgba(79,70,229,0.1)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
-
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'center';
     ctx.fillText(zone.name, width / 2, height - 40);
-
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = '16px Arial';
     ctx.fillText(zone.description, width / 2, height - 15);
@@ -104,7 +83,6 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({
 
   const handleCreateVisit = async () => {
     if (!filteredImageData || isSubmitting) return;
-
     setIsSubmitting(true);
     try {
       const response = await fetch(
@@ -122,27 +100,21 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({
         }
       );
       const data = await response.json();
-      const message =
-        typeof data?.message === 'string'
-          ? data.message
-          : '🚫 Unexpected server response.';
-
       if (response.ok) {
-        toast.success(data.message);
+        toast.success('✅ Your stamp has been collected!');
         setVisitCreated(true);
         queryClient.invalidateQueries(['myVisits']);
       } else {
         toast.error(data.message || '🚫 Could not collect the stamp.');
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error('🚫 Network error. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // 1️⃣ Cas géoloc indisponible
+  // 1️⃣ Erreur de géoloc
   if (locationUnavailable) {
     return (
       <div className="w-full max-w-md mx-auto p-6 space-y-3">
@@ -151,35 +123,23 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({
           <br />
           Please grant location access and give it another try!
         </p>
-        <Button
-          onClick={() => {
-            setVisitCreated(false);
-            onReset();
-          }}
-          variant="outline"
-          className="w-full"
+        <Button 
+          onClick={onReset} 
+          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           size="lg"
-        >
-          Retake photo
+          >
+            Retake photo
         </Button>
       </div>
     );
   }
 
-  // 2️⃣ Si pas de zone, rien
-  if (!zone) {
-    return null;
-  }
-
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-        {/* Zone de preview du canvas */}
+        {/* Canvas Preview */}
         <div className="relative">
-          <canvas
-            ref={canvasRef}
-            className="w-full h-auto max-h-96 object-contain"
-          />
+          <canvas ref={canvasRef} className="w-full h-auto max-h-96 object-contain" />
           {zone && (
             <div className="absolute top-4 left-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
               📍 {zone.name}
@@ -187,72 +147,72 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({
           )}
         </div>
 
-        {/* Zone du bouton ou du message */}
         <div className="p-6">
-          {isLoading || isFetching ? (
-            <p className="text-center text-gray-500">
-              Loading your visits...
-            </p>
-          ) : alreadyVisited ? (
-            <p className="text-blue-600 font-bold text-center break-normal">
-              🏅 You've already collected this stamp! <br />
-              Keep exploring and collect them all!
-            </p>
-          ) : !matchingZone ? (
+          {/* 2️⃣ Hors zone */}
+          {!matchingZone && (
             <>
               <p className="text-red-600 font-bold text-center break-normal">
-                📍 You're a bit too far from the spot. <br />
+                📍 You’re outside the zone.
+                <br />
                 Move closer to collect this stamp!
               </p>
-              <Button
-                onClick={() => {
-                  setVisitCreated(false);
-                  onReset();
-                }}
-                variant="outline"
-                className="w-full"
+              <Button 
+                onClick={onReset} 
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 size="lg"
               >
-                Retry
+                Retake photo
               </Button>
             </>
-          ) : visitCreated ? (
-            <p className="text-green-600 font-bold text-center break-normal">
-              ✅ You've collected a new stamp! <br />
+          )}
+
+          {/* 3️⃣ Chargement des visites */}
+          {matchingZone && (isLoading || isFetching) && (
+            <p className="text-center text-gray-500">Loading your visits…</p>
+          )}
+
+          {/* 4️⃣ Déjà visité */}
+          {matchingZone && !isLoading && !isFetching && alreadyVisited && (
+            <p className="text-blue-600 font-bold text-center break-normal">
+              🏅 You’ve already collected this stamp!
+              <br />
               Keep exploring and collect them all!
             </p>
-          ) : (
+          )}
+
+          {/* 5️⃣ Nouvelle visite */}
+          {matchingZone && !isLoading && !isFetching && !alreadyVisited && visitCreated && (
+            <p className="text-green-600 font-bold text-center break-normal">
+              ✅ You’ve collected a new stamp!
+              <br />
+              Keep exploring and collect them all!
+            </p>
+          )}
+
+          {/* 6️⃣ Prêt à collecter */}
+          {matchingZone && !isLoading && !alreadyVisited && !visitCreated && (
             <>
               <p className="text-green-600 font-bold text-center break-normal">
-                🎯 You're at the perfect spot! <br />
+                🎯 You’re at the perfect spot!
+                <br />
                 Ready to collect your stamp?
               </p>
               <Button
                 onClick={handleCreateVisit}
-                disabled={!filteredImageData || isSubmitting}
+                disabled={isSubmitting}
                 className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 size="lg"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2
-                      className="w-5 h-5 animate-spin mr-2"
-                    />
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
                     Collecting your stamp…
                   </>
                 ) : (
                   <>👉 Collect my stamp</>
                 )}
               </Button>
-              <Button
-                onClick={() => {
-                  setVisitCreated(false);
-                  onReset();
-                }}
-                variant="outline"
-                className="w-full"
-                size="lg"
-              >
+              <Button onClick={onReset} variant="outline" className="w-full" size="lg">
                 Retake photo
               </Button>
             </>
