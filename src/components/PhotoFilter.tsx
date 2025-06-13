@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { LocationZone } from './LocationZones';
 import { useMyVisits } from '@/hooks/useMyVisits';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface PhotoFilterProps {
   imageData: string;
   zone: LocationZone | null;
   onReset: () => void;
-  matchingZone: boolean; // ✅ nouvelle prop → est-ce que l'utilisateur est dans la zone ?
+  matchingZone: boolean; // nouvelle prop → est-ce que l'utilisateur est dans la zone ?
 }
 
 export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onReset, matchingZone }) => {
@@ -17,10 +18,12 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
 
   const [filteredImageData, setFilteredImageData] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [visitCreated, setVisitCreated] = useState<boolean>(false); // ✅ état pour dire "visit POST vient d'être fait"
+  const [visitCreated, setVisitCreated] = useState<boolean>(false); // état pour dire "visit POST vient d'être fait"
 
   const { data: myVisits, isLoading, isFetching, error } = useMyVisits();
   const alreadyVisited = myVisits?.includes(zone?.id ?? '');
+
+  const queryClient = useQueryClient();
 
   // Chaque fois que imageData ou zone change, on recharge le canvas
   useEffect(() => {
@@ -119,13 +122,14 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
 
       if (response.ok) {
         toast.success(message);
-        setVisitCreated(true); // ✅ On indique que le POST a bien été fait
+        setVisitCreated(true); // On indique que le POST a bien été fait
+        queryClient.invalidateQueries(['myVisits']); // On force le refresh de useMyVisits
       } else {
         toast.error(message || 'Erreur lors de la création de la visite.');
       }
     } catch (error) {
       console.error(error);
-      toast.error('Erreur réseau lors de la création de la visite.');
+      toast.error('🚫 Couldn’t collect the stamp. Please try again!');
     } finally {
       setIsSubmitting(false);
     }
@@ -154,15 +158,15 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
               {isLoading || isFetching ? (
                 <p className="text-center text-gray-500">Loading your visits...</p>
               ) : alreadyVisited ? (
-                // ✅ Cas 3 : déjà visité → message seul
+                // Cas 3 : déjà visité → message seul
                 <p className="text-blue-600 font-bold text-center">
-                  Vous avez déjà validé votre visite ici ✌️
+                  🏅 You've collected this stamp! Great job! 🎉
                 </p>
               ) : !matchingZone ? (
-                // ✅ Cas 2 : pas dans la zone → message + bouton Retry
+                // Cas 2 : pas dans la zone → message + bouton Retry
                 <>
                   <p className="text-red-600 font-bold text-center">
-                    Vous êtes trop loin du point. Rapprochez-vous pour valider votre visite !
+                    📍 You're a bit too far from the spot. Move closer to collect this stamp!
                   </p>
                   <Button
                     onClick={() => {
@@ -177,15 +181,15 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
                   </Button>
                 </>
               ) : visitCreated ? (
-                // ✅ Cas 1 (après POST) → feedback positif, boutons masqués
+                // Cas 1 (après POST) → feedback positif, boutons masqués
                 <p className="text-green-600 font-bold text-center">
-                  ✅ Your visit has been successfully saved!
+                  ✅ You've collected this stamp! Keep exploring and collect them all! 🗺️✨
                 </p>
               ) : (
-                // ✅ Cas 1 : dans la zone, pas encore visité → message + boutons Save & Retry
+                // Cas 1 : dans la zone, pas encore visité → message + boutons Save & Retry
                 <>
                   <p className="text-green-600 font-bold text-center">
-                    You're in the right spot! Ready to save your visit.
+                    🎯 You're at the perfect spot! Ready to collect your stamp?
                   </p>
                   <Button
                     onClick={handleCreateVisit}
@@ -196,10 +200,10 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                        Submitting…
+                        Collecting your stamp…
                       </>
                     ) : (
-                      <>Save my visit</>
+                      <>👉 Save and Collect Stamp</>
                     )}
                   </Button>
                   <Button
@@ -211,7 +215,7 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
                     className="w-full"
                     size="lg"
                   >
-                    Retry
+                    🔄 Retake Photo
                   </Button>
                 </>
               )}
