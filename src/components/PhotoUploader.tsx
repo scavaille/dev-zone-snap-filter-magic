@@ -17,12 +17,12 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onPhotoCapture }) 
 
   const processFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      toast.error('Please select a valid image file');
+      toast.error('🚫 That doesn’t look like a photo — please select a valid image!');
       return;
     }
 
     setIsProcessing(true);
-    toast.info('Getting your current location...');
+    //toast.info('Getting your current location...');
 
     try {
       // Convert file to base64
@@ -37,20 +37,20 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onPhotoCapture }) 
         imageDataPromise,
         getCurrentLocation().catch(error => {
           console.error('Location error:', error);
-          toast.warning('Could not get your location - Try again and make sure to allow access when your device asks for it!');
+          toast.warning('⚠️ We couldn’t get your location — please enable location sharing and try again!');
           return null;
         })
       ]);
 
       if (coordinates) {
-        toast.success(`Location found: ${coordinates.lat.toFixed(4)}, ${coordinates.lng.toFixed(4)}`);
+        //toast.success(`Location found: ${coordinates.lat.toFixed(4)}, ${coordinates.lng.toFixed(4)}`);
         onPhotoCapture(imageData, coordinates);
       } else {
         onPhotoCapture(imageData);
       }
     } catch (error) {
       console.error('Error processing photo:', error);
-      toast.error('Error processing the photo');
+      toast.error('⚠️ Something went wrong while processing your photo — please try again!');
     } finally {
       setIsProcessing(false);
     }

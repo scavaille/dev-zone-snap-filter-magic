@@ -102,38 +102,52 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
     ctx.fillText(zone.description, width / 2, height - 15);
   };
 
-  // Fonction pour POSTer une "visit" au serveur
-  const handleCreateVisit = async () => {
-    if (!filteredImageData || isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      const response = await fetch('/create/', {
+// Fonction pour POSTer une "visit" au serveur
+const handleCreateVisit = async () => {
+  if (!filteredImageData || isSubmitting) return;
+
+  setIsSubmitting(true);
+
+  try {
+    const response = await fetch(
+      window.collectorAppSettings.restUrl + 'citycollector/v1/create-visit',
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-WP-Nonce': window.collectorAppSettings.restNonce,
+        },
         body: new URLSearchParams({
           poi_id: zone?.id || '',
           image_data_url: filteredImageData,
         }),
-      });
-
-      const text = await response.text();
-      const endIdx = text.search(/<|\r?\n/);
-      const message = endIdx > 0 ? text.substring(0, endIdx).trim() : text.trim();
-
-      if (response.ok) {
-        toast.success(message);
-        setVisitCreated(true); // On indique que le POST a bien été fait
-        queryClient.invalidateQueries(['myVisits']); // On force le refresh de useMyVisits
-      } else {
-        toast.error(message || 'Erreur lors de la création de la visite.');
       }
-    } catch (error) {
-      console.error(error);
-      toast.error('🚫 Couldn’t collect the stamp. Please try again!');
-    } finally {
-      setIsSubmitting(false);
+    );
+
+    const data = await response.json();
+
+    // Vérification défensive : s'assurer que data.message est bien une string
+    const message =
+      typeof data?.message === 'string'
+        ? data.message
+        : '🚫 Unexpected server response.';
+
+    if (response.ok) {
+      toast.success(data.message); // on passe uniquement message ici ✅
+      setVisitCreated(true);
+      queryClient.invalidateQueries(['myVisits']); // rafraîchir la liste
+    } else {
+      toast.error(data.message || '🚫 Could not collect the stamp.');
     }
-  };
+  } catch (error) {
+    console.error(error);
+    toast.error('🚫 Network error. Please try again.');
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -160,13 +174,13 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
               ) : alreadyVisited ? (
                 // Cas 3 : déjà visité → message seul
                 <p className="text-blue-600 font-bold text-center">
-                  🏅 You've collected this stamp! Great job! 🎉
+                  🏅 You've collected this stamp! <br />Great job! 🎉
                 </p>
               ) : !matchingZone ? (
                 // Cas 2 : pas dans la zone → message + bouton Retry
                 <>
                   <p className="text-red-600 font-bold text-center">
-                    📍 You're a bit too far from the spot. Move closer to collect this stamp!
+                    📍 You're a bit too far from the spot. <br />Move closer to collect this stamp!
                   </p>
                   <Button
                     onClick={() => {
@@ -183,13 +197,13 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
               ) : visitCreated ? (
                 // Cas 1 (après POST) → feedback positif, boutons masqués
                 <p className="text-green-600 font-bold text-center">
-                  ✅ You've collected this stamp! Keep exploring and collect them all! 🗺️✨
+                  ✅ You've collected this stamp! <br />Keep exploring and collect them all!
                 </p>
               ) : (
                 // Cas 1 : dans la zone, pas encore visité → message + boutons Save & Retry
                 <>
                   <p className="text-green-600 font-bold text-center">
-                    🎯 You're at the perfect spot! Ready to collect your stamp?
+                    🎯 You're at the perfect spot! <br />Ready to collect your stamp?
                   </p>
                   <Button
                     onClick={handleCreateVisit}
@@ -203,7 +217,7 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
                         Collecting your stamp…
                       </>
                     ) : (
-                      <>👉 Save and Collect Stamp</>
+                      <>👉 Collect my stamp</>
                     )}
                   </Button>
                   <Button
@@ -215,7 +229,7 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
                     className="w-full"
                     size="lg"
                   >
-                    🔄 Retake Photo
+                    Retake photo
                   </Button>
                 </>
               )}
