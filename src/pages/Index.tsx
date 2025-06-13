@@ -5,29 +5,35 @@ import { PhotoFilter } from '@/components/PhotoFilter';
 import { findMatchingZone, LocationZone, useZones } from '@/components/LocationZones';
 import { toast } from 'sonner';
 
-const Index = () => {
+const Index: React.FC = () => {
   const [capturedImage, setCapturedImage] = useState<string>('');
   const [currentZone, setCurrentZone] = useState<LocationZone | null>(null);
-  const [showResult, setShowResult] = useState(false);
+  const [showResult, setShowResult] = useState<boolean>(false);
+  const [locationUnavailable, setLocationUnavailable] = useState<boolean>(false);
   const { data: zones = [] } = useZones();
 
-  const handlePhotoCapture = (imageData: string, location?: { lat: number; lng: number }) => {
+  const handlePhotoCapture = (
+    imageData: string,
+    location?: { lat: number; lng: number }
+  ) => {
     setCapturedImage(imageData);
-    
+
     if (location) {
+      setLocationUnavailable(false);
       const matchingZone = findMatchingZone(location, zones);
       setCurrentZone(matchingZone);
-      
+
       if (matchingZone) {
         toast.success(`🎉 Welcome to ${matchingZone.name}!`);
       } else {
         toast.info('Photo captured! No special location filter available.');
       }
     } else {
+      setLocationUnavailable(true);
       setCurrentZone(null);
-      toast.warning('Location unavailable - we can\'t confim your visit.');
+      toast.warning("Location unavailable – we can't confirm your visit.");
     }
-    
+
     setShowResult(true);
   };
 
@@ -35,6 +41,7 @@ const Index = () => {
     setCapturedImage('');
     setCurrentZone(null);
     setShowResult(false);
+    setLocationUnavailable(false);
   };
 
   return (
@@ -56,15 +63,14 @@ const Index = () => {
         {/* Main Content */}
         <div className="flex flex-col items-center">
           {!showResult ? (
-            <>
-              <PhotoUploader onPhotoCapture={handlePhotoCapture} />
-            </>
+            <PhotoUploader onPhotoCapture={handlePhotoCapture} />
           ) : (
             <PhotoFilter
               imageData={capturedImage}
               zone={currentZone}
               matchingZone={!!currentZone}
               onReset={handleReset}
+              locationUnavailable={locationUnavailable}
             />
           )}
         </div>

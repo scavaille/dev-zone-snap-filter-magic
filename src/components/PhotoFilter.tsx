@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { LocationZone } from './LocationZones';
@@ -10,22 +10,25 @@ interface PhotoFilterProps {
   imageData: string;
   zone: LocationZone | null;
   onReset: () => void;
-  matchingZone: boolean; // nouvelle prop → est-ce que l'utilisateur est dans la zone ?
+  matchingZone: boolean;
+  locationUnavailable: boolean;
 }
 
-export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onReset, matchingZone }) => {
+export const PhotoFilter: React.FC<PhotoFilterProps> = ({
+  imageData,
+  zone,
+  onReset,
+  matchingZone,
+  locationUnavailable,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   const [filteredImageData, setFilteredImageData] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [visitCreated, setVisitCreated] = useState<boolean>(false); // état pour dire "visit POST vient d'être fait"
-
-  const { data: myVisits, isLoading, isFetching, error } = useMyVisits();
-  const alreadyVisited = myVisits?.includes(zone?.id ?? '');
-
+  const [visitCreated, setVisitCreated] = useState<boolean>(false);
+  const { data: myVisits, isLoading, isFetching } = useMyVisits();
+  const alreadyVisited = myVisits?.includes(zone?.id ?? '') && !visitCreated;
   const queryClient = useQueryClient();
 
-  // Chaque fois que imageData ou zone change, on recharge le canvas
   useEffect(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -61,7 +64,6 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
     img.src = imageData;
   }, [imageData, zone]);
 
-  // Fonction pour dessiner le filtre du POI sur le canvas
   const applyLocationFilter = (
     ctx: CanvasRenderingContext2D,
     width: number,
@@ -90,64 +92,84 @@ export const PhotoFilter: React.FC<PhotoFilterProps> = ({ imageData, zone, onRes
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
-    // Ajout du nom du POI
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'center';
     ctx.fillText(zone.name, width / 2, height - 40);
 
-    // Ajout de la description
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = '16px Arial';
     ctx.fillText(zone.description, width / 2, height - 15);
   };
 
-// Fonction pour POSTer une "visit" au serveur
-const handleCreateVisit = async () => {
-  if (!filteredImageData || isSubmitting) return;
+  const handleCreateVisit = async () => {
+    if (!filteredImageData || isSubmitting) return;
 
-  setIsSubmitting(true);
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(
+        window.collectorAppSettings.restUrl + 'citycollector/v1/create-visit',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-WP-Nonce': window.collectorAppSettings.restNonce,
+          },
+          body: new URLSearchParams({
+            poi_id: zone?.id || '',
+            image_data_url: filteredImageData,
+          }),
+        }
+      );
+      const data = await response.json();
+      const message =
+        typeof data?.message === 'string'
+          ? data.message
+          : '🚫 Unexpected server response.';
 
-  try {
-    const response = await fetch(
-      window.collectorAppSettings.restUrl + 'citycollector/v1/create-visit',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-WP-Nonce': window.collectorAppSettings.restNonce,
-        },
-        body: new URLSearchParams({
-          poi_id: zone?.id || '',
-          image_data_url: filteredImageData,
-        }),
+      if (response.ok) {
+        toast.success(data.message);
+        setVisitCreated(true);
+        queryClient.invalidateQueries(['myVisits']);
+      } else {
+        toast.error(data.message || '🚫 Could not collect the stamp.');
       }
-    );
-
-    const data = await response.json();
-
-    // Vérification défensive : s'assurer que data.message est bien une string
-    const message =
-      typeof data?.message === 'string'
-        ? data.message
-        : '🚫 Unexpected server response.';
-
-    if (response.ok) {
-      toast.success(data.message); // on passe uniquement message ici ✅
-      setVisitCreated(true);
-      queryClient.invalidateQueries(['myVisits']); // rafraîchir la liste
-    } else {
-      toast.error(data.message || '🚫 Could not collect the stamp.');
+    } catch (error) {
+      console.error(error);
+      toast.error('🚫 Network error. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-  } catch (error) {
-    console.error(error);
-    toast.error('🚫 Network error. Please try again.');
-  } finally {
-    setIsSubmitting(false);
+  };
+
+  // 1️⃣ Cas géoloc indisponible
+  if (locationUnavailable) {
+    return (
+      <div className="w-full max-w-md mx-auto p-6 space-y-3">
+        <p className="text-red-600 font-bold text-center break-normal">
+          📍 Oops! We can’t pinpoint your location.
+          <br />
+          Please grant location access and give it another try!
+        </p>
+        <Button
+          onClick={() => {
+            setVisitCreated(false);
+            onReset();
+          }}
+          variant="outline"
+          className="w-full"
+          size="lg"
+        >
+          Retake photo
+        </Button>
+      </div>
+    );
   }
-};
 
-
+  // 2️⃣ Si pas de zone, rien
+  if (!zone) {
+    return null;
+  }
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -167,76 +189,74 @@ const handleCreateVisit = async () => {
 
         {/* Zone du bouton ou du message */}
         <div className="p-6">
-          {zone && (
-            <div className="space-y-3">
-              {isLoading || isFetching ? (
-                <p className="text-center text-gray-500">Loading your visits...</p>
-              ) : alreadyVisited ? (
-                // Cas 3 : déjà visité → message seul
-                <p className="text-blue-600 font-bold text-center">
-                  🏅 You've collected this stamp! <br />Great job! 🎉
-                </p>
-              ) : !matchingZone ? (
-                // Cas 2 : pas dans la zone → message + bouton Retry
-                <>
-                  <p className="text-red-600 font-bold text-center">
-                    📍 You're a bit too far from the spot. <br />Move closer to collect this stamp!
-                  </p>
-                  <Button
-                    onClick={() => {
-                      setVisitCreated(false);
-                      onReset();
-                    }}
-                    variant="outline"
-                    className="w-full"
-                    size="lg"
-                  >
-                    Retry
-                  </Button>
-                </>
-              ) : visitCreated ? (
-                // Cas 1 (après POST) → feedback positif, boutons masqués
-                <p className="text-green-600 font-bold text-center">
-                  ✅ You've collected this stamp! <br />Keep exploring and collect them all!
-                </p>
-              ) : (
-                // Cas 1 : dans la zone, pas encore visité → message + boutons Save & Retry
-                <>
-                  <p className="text-green-600 font-bold text-center">
-                    🎯 You're at the perfect spot! <br />Ready to collect your stamp?
-                  </p>
-                  <Button
-                    onClick={handleCreateVisit}
-                    disabled={!filteredImageData || isSubmitting}
-                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    size="lg"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                        Collecting your stamp…
-                      </>
-                    ) : (
-                      <>👉 Collect my stamp</>
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setVisitCreated(false);
-                      onReset();
-                    }}
-                    variant="outline"
-                    className="w-full"
-                    size="lg"
-                  >
-                    Retake photo
-                  </Button>
-                </>
-              )}
-            </div>
+          {isLoading || isFetching ? (
+            <p className="text-center text-gray-500">
+              Loading your visits...
+            </p>
+          ) : alreadyVisited ? (
+            <p className="text-blue-600 font-bold text-center break-normal">
+              🏅 You've already collected this stamp! <br />
+              Keep exploring and collect them all!
+            </p>
+          ) : !matchingZone ? (
+            <>
+              <p className="text-red-600 font-bold text-center break-normal">
+                📍 You're a bit too far from the spot. <br />
+                Move closer to collect this stamp!
+              </p>
+              <Button
+                onClick={() => {
+                  setVisitCreated(false);
+                  onReset();
+                }}
+                variant="outline"
+                className="w-full"
+                size="lg"
+              >
+                Retry
+              </Button>
+            </>
+          ) : visitCreated ? (
+            <p className="text-green-600 font-bold text-center break-normal">
+              ✅ You've collected a new stamp! <br />
+              Keep exploring and collect them all!
+            </p>
+          ) : (
+            <>
+              <p className="text-green-600 font-bold text-center break-normal">
+                🎯 You're at the perfect spot! <br />
+                Ready to collect your stamp?
+              </p>
+              <Button
+                onClick={handleCreateVisit}
+                disabled={!filteredImageData || isSubmitting}
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                size="lg"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2
+                      className="w-5 h-5 animate-spin mr-2"
+                    />
+                    Collecting your stamp…
+                  </>
+                ) : (
+                  <>👉 Collect my stamp</>
+                )}
+              </Button>
+              <Button
+                onClick={() => {
+                  setVisitCreated(false);
+                  onReset();
+                }}
+                variant="outline"
+                className="w-full"
+                size="lg"
+              >
+                Retake photo
+              </Button>
+            </>
           )}
-
-          {/* On peut aussi mettre ici un bouton Reset général si besoin */}
         </div>
       </div>
     </div>
